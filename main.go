@@ -2,38 +2,40 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"os"
 
 	"github.com/gin-gonic/gin"
 )
 
+func upload(c *gin.Context) {
+	file, header, err := c.Request.FormFile("file")
+	if err != nil {
+		c.String(http.StatusBadRequest, fmt.Sprintf("file err : %s", err.Error()))
+		return
+	}
+	filename := header.Filename
+	out, err := os.Create("public/" + filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer out.Close()
+	_, err = io.Copy(out, file)
+	if err != nil {
+		log.Fatal(err)
+	}
+	//filepath := "http://localhost:8080/file/" + filename
+	c.JSON(http.StatusOK, gin.H{"filepath": filename + " was uploaded"})
+}
 func main() {
-	r := gin.Default()
-
-	// Get Example
-	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "pong",
-		})
+	router := gin.Default()
+	router.LoadHTMLGlob("select_file.html")
+	router.GET("/", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "select_file.html", gin.H{})
 	})
-
-	// Post Example
-	/*	POST /post?id=1234&page=1 HTTP/1.1
-		Content-Type: application/x-www-form-urlencoded
-
-		name=manu&message=this_is_great
-	*/
-	r.POST("/live", func(c *gin.Context) {
-		//id := c.Query("id")
-		streamkey := c.PostForm("streamkey")
-		fmt.Printf(" streamkey is %s", streamkey)
-	})
-
-	r.GET("/root", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "root",
-		})
-	})
-
-	//r.Run("127.0.0.1:10144") // defualt listen and serve on 0.0.0.0:8080
-	r.Run("0.0.0.0:8080")
+	router.POST("/upload", upload)
+	router.StaticFS("/file", http.Dir("public"))
+	router.Run(":8080")
 }
